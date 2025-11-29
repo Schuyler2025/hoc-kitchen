@@ -1,0 +1,7 @@
+{
+  "name": "ZenKitchen Air",
+  "description": "A futuristic mobile recipe app featuring touchless air-gesture controls for hygiene while cooking, powered by AI.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
