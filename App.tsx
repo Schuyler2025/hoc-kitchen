@@ -38,15 +38,15 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900 relative">
-      
+
       {/* Global Header */}
       <header className="bg-white/80 backdrop-blur-md sticky top-0 z-30 border-b border-gray-200/50 supports-[backdrop-filter]:bg-white/60">
         <div className="max-w-md mx-auto px-4 pt-4 pb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-orange-200 shadow-lg">Z</div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900">ZenKitchen</h1>
+            <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-orange-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-orange-200 shadow-lg">H</div>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">HOC-Kitchen</h1>
           </div>
-          <button 
+          {/* <button
             onClick={() => setGestureMode(!gestureMode)}
             className={`p-2.5 rounded-full transition-all duration-300 ${gestureMode ? 'bg-green-100 text-green-700 shadow-inner' : 'bg-gray-100/50 text-gray-500 hover:bg-gray-100'}`}
             title="Toggle Air Gestures"
@@ -54,7 +54,7 @@ const App: React.FC = () => {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
             </svg>
-          </button>
+          </button> */}
         </div>
 
         {/* Categories Bar (Only in List View) */}
@@ -66,8 +66,8 @@ const App: React.FC = () => {
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all duration-300 ${
-                    selectedCategory === cat 
-                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' 
+                    selectedCategory === cat
+                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
                       : 'bg-gray-100/80 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
@@ -84,7 +84,7 @@ const App: React.FC = () => {
         {view === AppView.LIST ? (
           <div className="px-4 grid gap-5">
             {filteredRecipes.map((recipe, index) => (
-              <div 
+              <div
                 key={index}
                 onClick={() => handleRecipeClick(recipe)}
                 className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100 overflow-hidden active:scale-[0.98] transition-all duration-300 flex hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)]"
@@ -112,7 +112,7 @@ const App: React.FC = () => {
                 </div>
               </div>
             ))}
-            
+
             {filteredRecipes.length === 0 && (
               <div className="text-center py-20 text-gray-400 flex flex-col items-center">
                  <div className="text-4xl mb-2">🥗</div>
@@ -121,26 +121,26 @@ const App: React.FC = () => {
             )}
           </div>
         ) : (
-          <RecipeDetail 
-            recipe={selectedRecipe!} 
-            onBack={handleBack} 
+          <RecipeDetail
+            recipe={selectedRecipe!}
+            onBack={handleBack}
             zoomScale={currentZoomScale}
           />
         )}
       </main>
 
       {/* Gesture Controller (Overlay) */}
-      <GestureController 
-        isActive={gestureMode} 
-        onZoomChange={handleGestureZoom} 
+      <GestureController
+        isActive={gestureMode}
+        onZoomChange={handleGestureZoom}
       />
 
       {/* Usage Hint */}
-      {gestureMode && view === AppView.DETAIL && (
+      {/* {gestureMode && view === AppView.DETAIL && (
         <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-black/70 text-white text-xs px-4 py-2 rounded-full backdrop-blur pointer-events-none z-50 animate-bounce">
           Spread fingers to Zoom In
         </div>
-      )}
+      )} */}
     </div>
   );
 };

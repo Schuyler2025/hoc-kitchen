@@ -6,7 +6,7 @@ import jieba
 
 # ---------------------- 配置参数（重点修改这里！）----------------------
 PDF_PATH = "老乡鸡.pdf"  # 你的PDF文件路径
-OUTPUT_JSON = "dish_info_category_page_img.json"  # 输出JSON路径
+OUTPUT_JSON = "dish_info_category_page_img_35.json"  # 输出JSON路径
 WATERMARK_CHARS = {"告", "报", "源", "溯", "品", "鸡", "乡", "老", "菜", "验", "证", "合", "格"}  # 水印碎字
 COMMON_FIELDS = {
     "基本信息", "品名", "味型", "最佳风味期", "加工等级", "配料",
@@ -21,13 +21,13 @@ END_PAGE = 210    # 结束页码（可设为None表示读取到最后一页）
 # 核心配置：页码范围→类别映射（按需修改！）
 # 格式：[(起始页, 结束页, 类别名称), ...]，范围包含边界，未匹配到的页码默认"其他类"
 PAGE_TO_CATEGORY = [
-    (14, 138, "正餐菜品类"),    # 1-50页 → 主食类
-    (139, 150, "炸品类"),  # 51-150页 → 热菜类
-    (151, 186, "主食类"), # 151-200页 → 凉菜类
-    (187, 207, "早餐类"), # 201-250页 → 汤羹类
-    (208, 210, "饮品类")
+    (14, 138, "正餐菜品"),    # 1-50页 → 主食类
+    (139, 150, "炸品"),  # 51-150页 → 热菜类
+    (151, 186, "主食"), # 151-200页 → 凉菜类
+    (187, 207, "早餐"), # 201-250页 → 汤羹类
+    (208, 210, "饮品")
 ]
-DEFAULT_CATEGORY = "其他类"  # 未匹配到页码范围时的默认类别
+DEFAULT_CATEGORY = "其他"  # 未匹配到页码范围时的默认类别
 # -------------------------------------------------------------------
 
 def get_category_by_page(page_num):
@@ -198,8 +198,32 @@ def parse_table(cleaned_table):
                     basic_info[cell] = clean_cell_smart(non_empty_cells[idx + 1], field_context=cell)
             elif cell == "配料":
                 if idx + 1 < len(non_empty_cells):
-                    ingredients = re.split(r"[、，]", non_empty_cells[idx + 1])
-                    basic_info[cell] = [clean_cell_smart(ing.strip()) for ing in ingredients if ing.strip()]
+                    # 改进配料拆分逻辑，处理括号匹配
+                    ingredients_str = non_empty_cells[idx + 1]
+                    ingredients = []
+                    start = 0
+                    bracket_count = 0  # 括号计数器，用于处理成对括号
+
+                    for i, c in enumerate(ingredients_str):
+                        if c == '（':
+                            bracket_count += 1
+                        elif c == '）':
+                            bracket_count -= 1
+                            if bracket_count < 0:  # 处理不匹配的右括号
+                                bracket_count = 0
+                        # 只在括号平衡且遇到分隔符时拆分
+                        elif bracket_count == 0 and c in ['、', '，']:
+                            ingredient = ingredients_str[start:i].strip()
+                            if ingredient:
+                                ingredients.append(clean_cell_smart(ingredient))
+                            start = i + 1
+
+                    # 添加最后一个配料
+                    last_ingredient = ingredients_str[start:].strip()
+                    if last_ingredient:
+                        ingredients.append(clean_cell_smart(last_ingredient))
+
+                    basic_info[cell] = ingredients
 
         # 3. 提取餐厅操作工艺（兼容跨页步骤合并）
         if "餐厅操作工艺" in non_empty_cells[0] or any("制作工艺" in cell for cell in non_empty_cells):
@@ -326,7 +350,7 @@ def extract_dish_info_final(pdf_path, start_page, end_page=None):
             # 2. 格式化图片路径：类别_page_页码_img.png
             # img_path = f"{dish_category}_page_{table_start_page}_img.png"
             # （可选）如果需要图片路径带目录，比如 output/images/xxx.png，可改为：
-            img_path = f"output/images/{dish_category}_page_{table_start_page}_img.png"
+            img_path = f"/images/{dish_category}_page_{table_start_page}_img.png"
 
             # 3. 组装最终输出字段（严格保留4个指定字段）
             final_dish = {

@@ -21,27 +21,65 @@ const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isA
   const lastVideoTimeRef = useRef<number>(-1);
 
   // Initialize MediaPipe HandLandmarker
+  // useEffect(() => {
+  //   const initMediaPipe = async () => {
+  //     try {
+  //       const vision = await window.vision.FilesetResolver.forVisionTasks(
+  //         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+  //       );
+  //       const landmarker = await window.vision.HandLandmarker.createFromOptions(vision, {
+  //         baseOptions: {
+  //           modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+  //           delegate: "GPU"
+  //         },
+  //         runningMode: "VIDEO",
+  //         numHands: 1
+  //       });
+  //       setHandLandmarker(landmarker);
+  //       console.log("HandLandmarker loaded");
+  //     } catch (err) {
+  //       console.error("Failed to load MediaPipe", err);
+  //     }
+  //   };
+  //   initMediaPipe();
+  // }, []);
   useEffect(() => {
+    let landmarkerInstance: any = null;
+
     const initMediaPipe = async () => {
       try {
-        const vision = await window.vision.FilesetResolver.forVisionTasks(
+        // 关键：用字符串拼接或模板字面量，避免构建工具提前解析
+        const moduleUrl = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0`;
+        const { FilesetResolver, HandLandmarker } = await import(/* @vite-ignore */ moduleUrl);
+
+        const vision = await FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
         );
-        const landmarker = await window.vision.HandLandmarker.createFromOptions(vision, {
+
+        const landmarker = await HandLandmarker.createFromOptions(vision, {
           baseOptions: {
-            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-            delegate: "GPU"
+            modelAssetPath:
+              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+            delegate: "GPU",
           },
           runningMode: "VIDEO",
-          numHands: 1
+          numHands: 1,
         });
+
         setHandLandmarker(landmarker);
-        console.log("HandLandmarker loaded");
+        console.log("HandLandmarker loaded via dynamic import");
       } catch (err) {
-        console.error("Failed to load MediaPipe", err);
+        console.error("Failed to load MediaPipe:", err);
       }
     };
+
     initMediaPipe();
+
+    return () => {
+      if (landmarkerInstance) {
+        landmarkerInstance.close?.(); // 安全调用 close
+      }
+    };
   }, []);
 
   // Setup Camera
@@ -81,16 +119,16 @@ const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isA
       if (videoRef.current.currentTime !== lastVideoTimeRef.current) {
         lastVideoTimeRef.current = videoRef.current.currentTime;
         const results = handLandmarker.detectForVideo(videoRef.current, nowInMs) as HandLandmarkerResult;
-        
+
         if (results.landmarks && results.landmarks.length > 0) {
           const landmarks = results.landmarks[0];
           // Thumb tip is 4, Index tip is 8
           const thumbTip = landmarks[4];
           const indexTip = landmarks[8];
-          
+
           // Calculate Euclidean distance
           const distance = Math.sqrt(
-            Math.pow(thumbTip.x - indexTip.x, 2) + 
+            Math.pow(thumbTip.x - indexTip.x, 2) +
             Math.pow(thumbTip.y - indexTip.y, 2)
           );
 
@@ -100,17 +138,17 @@ const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isA
           // Simple linear mapping:
           const minDist = 0.03;
           const maxDist = 0.20;
-          
+
           let normalized = (distance - minDist) / (maxDist - minDist);
           normalized = Math.max(0, Math.min(1, normalized));
-          
+
           // Invert logic: Pinch (small distance) = Zoom Out? Or Spread = Zoom In?
           // Usually spread = zoom in.
           // Let's do: Spread (large distance) = Zoom In (Seeing details)
           // Pinch (small distance) = Zoom Out (Overview)
-          
+
           const targetScale = 1 + (normalized * 1.5); // Range 1.0 to 2.5
-          
+
           onZoomChange(targetScale);
         }
       }
@@ -133,11 +171,11 @@ const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isA
 
   return (
     <div className="fixed top-4 right-4 z-50 w-24 h-32 bg-black rounded-lg overflow-hidden border-2 border-green-400 shadow-lg opacity-80">
-      <video 
-        ref={videoRef} 
-        autoPlay 
-        playsInline 
-        muted 
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
         className="w-full h-full object-cover transform scale-x-[-1]" // Mirror effect
       />
       <div className="absolute bottom-0 w-full bg-black/50 text-[10px] text-white text-center py-1">
