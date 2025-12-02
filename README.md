@@ -2,14 +2,15 @@
  * @Author: Schuyler schuylerhu@gmail.com
  * @Date: 2025-11-29 22:01:03
  * @LastEditors: Schuyler schuylerhu@gmail.com
- * @LastEditTime: 2025-12-01 11:03:51
+ * @LastEditTime: 2025-12-02 14:19:56
  * @FilePath: \hoc-kitchen\README.md
  * @Description:
  *
  * Copyright (c) 2025 by Schuyler, All Rights Reserved.
 -->
+
 <div align="center">
-<img width="250" height="600" alt="HOC-Kitchen" src="hoc.jpg" />
+<img width="250" height="600" alt="HOC-Kitchen" src="hoc-gesture.gif" />
 </div>
 
 # HOC-Kitchen 🍳
@@ -39,29 +40,25 @@ HOC-Kitchen 是一个创新的厨房助手应用，结合了现代Web技术和�
 ### 安装与运行
 
 1. **克隆项目**
-```bash
-git clone https://github.com/schuyler2025/hoc-kitchen.git
-cd hoc-kitchen
-```
+   
+   ```bash
+   git clone https://github.com/schuyler2025/hoc-kitchen.git
+   cd hoc-kitchen
+   ```
 
 2. **安装依赖**
-```bash
-npm install
-```
+   
+   ```bash
+   npm install
+   ```
 
-3. **配置环境变量**
-创建 `.env.local` 文件并添加Gemini API密钥：
-```env
-GEMINI_API_KEY=your_gemini_api_key_here
-```
+3. **启动开发服务器**
+   
+   ```bash
+   npm run dev
+   ```
 
-4. **启动开发服务器**
-```bash
-npm run dev
-```
-
-5. **访问应用**
-打开浏览器访问 `http://localhost:4173`
+4. **访问应用** 打开浏览器访问 `http://localhost:4173`
 
 ### 构建生产版本
 
@@ -73,17 +70,20 @@ npm run preview
 ## 🎯 功能演示
 
 ### 菜品浏览
+
 - 查看各类菜品的基本信息和图片
 - 按类别筛选（正餐、早餐、炸品、饮品、主食）
 - 点击菜品查看详细制作工艺
 
 ### 手势控制
+
 - 开启手势模式后，在详情页面可以通过手势缩放图片
 - 张开手指放大，合拢手指缩小
 
 ## 📊 数据源
 
 项目使用 `dish_info_category_page_img.json` 作为主要数据源，包含：
+
 - 200+ 菜品数据
 - 完整的制作工艺说明
 - 分类信息（正餐、早餐、炸品、饮品、主食）
@@ -107,12 +107,9 @@ npm run preview
 
 - [React](https://reactjs.org/) - 优秀的前端框架
 - [Vite](https://vitejs.dev/) - 快速的构建工具
-- [Google Gemini](https://ai.google.dev/) - AI服务支持
 - [MediaPipe](https://mediapipe.dev/) - 手势识别技术
 
-## 📞 联系我们
+## 📞 联系我
 
 - 作者: Schuyler
 - 邮箱: schuylerhu@gmail.com
-
-

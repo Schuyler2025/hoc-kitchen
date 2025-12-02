@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, RefObject } from 'react';
 import { Recipe } from '../types';
 import { askChefAboutRecipe } from '../services/aiService';
 
@@ -6,9 +6,25 @@ interface RecipeDetailProps {
   recipe: Recipe;
   onBack: () => void;
   zoomScale: number;
+  scrollContainerRef?: RefObject<HTMLDivElement>;
+  onNext?: () => void;
+  onPrev?: () => void;
+  currentIndex?: number;
+  totalCount?: number;
+  textScrollX?: number; // Horizontal scroll position from parent
 }
 
-const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack, zoomScale }) => {
+const RecipeDetail: React.FC<RecipeDetailProps> = ({
+  recipe,
+  onBack,
+  zoomScale,
+  scrollContainerRef,
+  onNext,
+  onPrev,
+  currentIndex,
+  totalCount,
+  textScrollX = 0
+}) => {
   const [aiResponse, setAiResponse] = useState<string>('');
   const [isAsking, setIsAsking] = useState(false);
 
@@ -31,7 +47,10 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack, zoomScale }
   };
 
   return (
-    <div className="fixed inset-0 bg-white z-40 overflow-y-auto pb-20">
+    <div
+      ref={scrollContainerRef}
+      className="fixed inset-0 bg-white z-40 overflow-y-auto pb-20"
+    >
       {/* Sticky Header */}
       <div className="sticky top-0 z-10 flex items-center justify-between p-4 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <button
@@ -41,26 +60,24 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack, zoomScale }
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
         </button>
         <h1 className="text-lg font-bold text-gray-900 truncate max-w-[200px]">{recipe.基本信息.品名}</h1>
-        <div className="w-10"></div>
+        <div className="flex items-center gap-2">
+          {currentIndex !== undefined && totalCount !== undefined && (
+            <span className="text-xs text-gray-500">
+              {currentIndex + 1}/{totalCount}
+            </span>
+          )}
+          <div className="w-10"></div>
+        </div>
       </div>
 
       <div className="p-4 space-y-6">
-        {/* Scalable Image Area */}
+        {/* Image Area (no zoom) */}
         <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-gray-100 shadow-inner group">
-          <div
-            className="w-full h-full transition-transform duration-75 origin-center will-change-transform"
-            style={{ transform: `scale(${smoothScale})` }}
-          >
-            <img
-              src={recipe.图片}
-              alt={recipe.基本信息.品名}
-              className="w-full h-full object-cover"
-            />
-          </div>
-          {/* Zoom Indicator
-          <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-xs backdrop-blur-sm pointer-events-none">
-             Air Zoom: {smoothScale.toFixed(1)}x
-          </div> */}
+          <img
+            src={recipe.图片}
+            alt={recipe.基本信息.品名}
+            className="w-full h-full object-cover"
+          />
         </div>
 
         {/* Info Cards */}
@@ -87,17 +104,37 @@ const RecipeDetail: React.FC<RecipeDetailProps> = ({ recipe, onBack, zoomScale }
           </div>
         </div>
 
-        {/* Method */}
+        {/* Method - Scalable with horizontal scroll */}
         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold text-sm">
               {recipe.餐厅操作工艺.烹饪方式[0]? recipe.餐厅操作工艺.烹饪方式[0] : '🍽️'}
             </span>
             <h2 className="text-xl font-bold text-gray-900">制作工艺</h2>
+            {smoothScale > 1 && (
+              <span className="ml-auto text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full">
+                {smoothScale.toFixed(1)}x
+              </span>
+            )}
           </div>
-          <p className="text-gray-600 leading-relaxed">
-            {recipe.餐厅操作工艺.制作工艺}
-          </p>
+          <div className="overflow-x-auto">
+            <div
+              className="transition-transform duration-75 origin-top-left"
+              style={{ 
+                transform: `scale(${smoothScale}) translateX(${textScrollX}px)`,
+                minWidth: smoothScale > 1 ? `${100 * smoothScale}%` : '100%'
+              }}
+            >
+              <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">
+                {recipe.餐厅操作工艺.制作工艺}
+              </p>
+            </div>
+          </div>
+          {smoothScale > 1.2 && (
+            <div className="mt-2 text-xs text-gray-400 text-center">
+              💡 提示：文字放大后可左右滑动查看
+            </div>
+          )}
         </div>
 
         {/* AI Chef Assistant */}

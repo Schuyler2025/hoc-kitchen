@@ -1,95 +1,146 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { HandLandmarkerResult } from '../types';
+import { HandLandmarkerResult, GestureCallbacks } from '../types';
 
 interface GestureControllerProps {
-  onZoomChange: (scale: number) => void;
   isActive: boolean;
+  callbacks: GestureCallbacks;
 }
 
-// Global declaration for MediaPipe loaded via CDN
+// Global declaration for MediaPipe
 declare global {
   interface Window {
     vision: any;
   }
 }
 
-const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isActive }) => {
+const GestureController: React.FC<GestureControllerProps> = ({ isActive, callbacks }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isCameraReady, setIsCameraReady] = useState(false);
   const [handLandmarker, setHandLandmarker] = useState<any>(null);
+  const [isModelLoaded, setIsModelLoaded] = useState(false);
   const requestRef = useRef<number>(0);
   const lastVideoTimeRef = useRef<number>(-1);
 
-  // Initialize MediaPipe HandLandmarker
-  // useEffect(() => {
-  //   const initMediaPipe = async () => {
-  //     try {
-  //       const vision = await window.vision.FilesetResolver.forVisionTasks(
-  //         "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
-  //       );
-  //       const landmarker = await window.vision.HandLandmarker.createFromOptions(vision, {
-  //         baseOptions: {
-  //           modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
-  //           delegate: "GPU"
-  //         },
-  //         runningMode: "VIDEO",
-  //         numHands: 1
-  //       });
-  //       setHandLandmarker(landmarker);
-  //       console.log("HandLandmarker loaded");
-  //     } catch (err) {
-  //       console.error("Failed to load MediaPipe", err);
-  //     }
-  //   };
-  //   initMediaPipe();
-  // }, []);
+  // Gesture state tracking
+  const gestureStateRef = useRef({
+    lastGesture: '',
+    gestureStartTime: 0,
+    lastHandPosition: { x: 0, y: 0 },
+    scrollVelocity: 0,
+    zoomDistance: 0,
+    gestureCooldown: 0,
+    fistHoldStartTime: 0, // Track how long fist is held
+    isFistStable: false    // Track if fist gesture is stable
+  });
+
+  // Initialize MediaPipe with offline support
   useEffect(() => {
     let landmarkerInstance: any = null;
 
     const initMediaPipe = async () => {
       try {
-        // 关键：用字符串拼接或模板字面量，避免构建工具提前解析
-        const moduleUrl = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0`;
-        const { FilesetResolver, HandLandmarker } = await import(/* @vite-ignore */ moduleUrl);
+        // Try to load from local first, fallback to CDN
+        const wasmPath = '/wasm';
+        const modelPath = '/models/hand_landmarker.task';
 
-        const vision = await FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
-        );
+        let FilesetResolver, HandLandmarker;
 
-        const landmarker = await HandLandmarker.createFromOptions(vision, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-            delegate: "GPU",
-          },
-          runningMode: "VIDEO",
-          numHands: 1,
-        });
+        // Try to load MediaPipe - local first, then CDN
+        let loadedFromLocal = false;
+        try {
+          // Try local vision_bundle.js first
+          const localModule = await import(/* @vite-ignore */ '/wasm/vision_bundle.js' as string);
+          FilesetResolver = localModule.FilesetResolver;
+          HandLandmarker = localModule.HandLandmarker;
+          loadedFromLocal = true;
+          console.log('✓ Loaded MediaPipe from local vision_bundle.js');
+        } catch (localError) {
+          console.log('Local vision_bundle.js not found, trying CDN...');
+          // Fallback to CDN - import the package
+          try {
+            const moduleUrl = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0`;
+            const module = await import(/* @vite-ignore */ moduleUrl);
+            FilesetResolver = module.FilesetResolver;
+            HandLandmarker = module.HandLandmarker;
+            console.log('✓ Loaded MediaPipe from CDN');
+          } catch (cdnError) {
+            console.error('Failed to load MediaPipe from both local and CDN:', cdnError);
+            throw cdnError;
+          }
+        }
+
+        // Try to use local WASM files, fallback to CDN
+        let vision;
+        if (loadedFromLocal) {
+          try {
+            vision = await FilesetResolver.forVisionTasks(wasmPath);
+            console.log('✓ Using local WASM files');
+          } catch (e) {
+            console.log('Local WASM files not found, using CDN WASM...');
+            vision = await FilesetResolver.forVisionTasks(
+              "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+            );
+          }
+        } else {
+          // Already using CDN, use CDN WASM
+          vision = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
+          );
+        }
+
+        let landmarker;
+        try {
+          // Try local model first
+          landmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: modelPath,
+              delegate: "GPU",
+            },
+            runningMode: "VIDEO",
+            numHands: 1,
+          });
+          console.log("HandLandmarker loaded from local files");
+        } catch (localModelError) {
+          console.log("Local model not found, using CDN fallback");
+          // Fallback to CDN model
+          landmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath:
+                "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+              delegate: "GPU",
+            },
+            runningMode: "VIDEO",
+            numHands: 1,
+          });
+          console.log("HandLandmarker loaded from CDN");
+        }
 
         setHandLandmarker(landmarker);
-        console.log("HandLandmarker loaded via dynamic import");
+        setIsModelLoaded(true);
       } catch (err) {
         console.error("Failed to load MediaPipe:", err);
       }
     };
 
-    initMediaPipe();
+    if (isActive) {
+      initMediaPipe();
+    }
 
     return () => {
       if (landmarkerInstance) {
-        landmarkerInstance.close?.(); // 安全调用 close
+        landmarkerInstance.close?.();
       }
     };
-  }, []);
+  }, [isActive]);
 
   // Setup Camera
   useEffect(() => {
-    if (!isActive || !handLandmarker) return;
+    if (!isActive || !isModelLoaded) return;
 
     const startCamera = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 320, height: 240, facingMode: "user" }
+          video: { width: 640, height: 480, facingMode: "user" }
         });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
@@ -110,7 +161,146 @@ const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isA
         stream.getTracks().forEach(track => track.stop());
       }
     };
-  }, [isActive, handLandmarker]);
+  }, [isActive, isModelLoaded]);
+
+  // Detect gestures from hand landmarks
+  const detectGesture = useCallback((landmarks: { x: number; y: number; z: number }[]) => {
+    const state = gestureStateRef.current;
+    const now = Date.now();
+
+    // Thumb tip (4), Index tip (8), Middle tip (12), Ring tip (16), Pinky tip (20)
+    // Wrist (0)
+    const thumbTip = landmarks[4];
+    const indexTip = landmarks[8];
+    const middleTip = landmarks[12];
+    const ringTip = landmarks[16];
+    const pinkyTip = landmarks[20];
+    const wrist = landmarks[0];
+    const middleMCP = landmarks[9]; // Middle finger MCP (knuckle)
+
+    // Calculate hand center (palm position)
+    const handCenter = {
+      x: wrist.x,
+      y: wrist.y
+    };
+
+    // Calculate distances
+    const thumbIndexDist = Math.sqrt(
+      Math.pow(thumbTip.x - indexTip.x, 2) +
+      Math.pow(thumbTip.y - indexTip.y, 2)
+    );
+
+    const indexMiddleDist = Math.sqrt(
+      Math.pow(indexTip.x - middleTip.x, 2) +
+      Math.pow(indexTip.y - middleTip.y, 2)
+    );
+
+    // Check if fingers are extended
+    const isThumbExtended = thumbTip.x < wrist.x; // Thumb to the left of wrist
+    const isIndexExtended = indexTip.y < middleMCP.y; // Index tip above knuckle
+    const isMiddleExtended = middleTip.y < middleMCP.y;
+    const isRingExtended = ringTip.y < middleMCP.y;
+    const isPinkyExtended = pinkyTip.y < middleMCP.y;
+
+    const extendedFingers = [
+      isThumbExtended,
+      isIndexExtended,
+      isMiddleExtended,
+      isRingExtended,
+      isPinkyExtended
+    ].filter(Boolean).length;
+
+    // Gesture cooldown to prevent rapid firing
+    if (now - state.gestureCooldown < 300) {
+      return;
+    }
+
+    // 1. POINTING UP/DOWN: Index finger extended, others closed (higher priority than zoom)
+    // Check scroll gestures BEFORE zoom to prevent conflict
+    if (isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+      if (handCenter.y < state.lastHandPosition.y - 0.02) { // Very sensitive for scroll up
+        // Hand moving up
+        if (callbacks.onScroll) {
+          callbacks.onScroll('up', 200); // Increased scroll amount
+        }
+        state.gestureCooldown = now;
+        state.lastGesture = 'scroll_up';
+        // Reset fist timer when doing other gestures
+        state.fistHoldStartTime = 0;
+        state.isFistStable = false;
+        return;
+      }
+      if (handCenter.y > state.lastHandPosition.y + 0.02) { // Very sensitive for scroll down
+        // Hand moving down
+        if (callbacks.onScroll) {
+          callbacks.onScroll('down', 200); // Increased scroll amount
+        }
+        state.gestureCooldown = now;
+        state.lastGesture = 'scroll_down';
+        // Reset fist timer when doing other gestures
+        state.fistHoldStartTime = 0;
+        state.isFistStable = false;
+        return;
+      }
+    }
+
+    // 2. PINCH/ZOOM: Thumb and index finger close together
+    if (thumbIndexDist < 0.05) {
+      // Pinch detected - zoom out
+      if (callbacks.onZoomChange) {
+        const scale = Math.max(0.5, state.zoomDistance * 0.8);
+        callbacks.onZoomChange(scale);
+        state.zoomDistance = scale;
+      }
+      state.lastGesture = 'pinch';
+      // Reset fist timer when doing other gestures
+      state.fistHoldStartTime = 0;
+      state.isFistStable = false;
+      return;
+    }
+
+    // 3. SPREAD/ZOOM IN: Fingers spread wide
+    if (thumbIndexDist > 0.15 && extendedFingers >= 3) {
+      if (callbacks.onZoomChange) {
+        const scale = Math.min(3.0, state.zoomDistance * 1.2);
+        callbacks.onZoomChange(scale);
+        state.zoomDistance = scale;
+      }
+      state.lastGesture = 'spread';
+      // Reset fist timer when doing other gestures
+      state.fistHoldStartTime = 0;
+      state.isFistStable = false;
+      return;
+    }
+
+    // 4. FIST/BACK: All fingers closed - requires 1.5 seconds hold to prevent accidental triggers
+    if (extendedFingers === 0 || (extendedFingers === 1 && isThumbExtended)) {
+      // Start or continue fist hold
+      if (state.fistHoldStartTime === 0) {
+        state.fistHoldStartTime = now;
+      }
+      
+      const holdDuration = now - state.fistHoldStartTime;
+      
+      // Require 1.5 seconds (1500ms) of stable fist hold
+      if (holdDuration > 1500 && !state.isFistStable) {
+        if (callbacks.onBack) {
+          callbacks.onBack();
+        }
+        state.gestureCooldown = now;
+        state.lastGesture = 'fist';
+        state.isFistStable = true; // Mark as triggered to avoid repeat
+        return;
+      }
+    } else {
+      // Reset fist hold if hand opens
+      state.fistHoldStartTime = 0;
+      state.isFistStable = false;
+    }
+
+    // Update last position
+    state.lastHandPosition = handCenter;
+  }, [callbacks]);
 
   // Process Frames
   const predictWebcam = useCallback(() => {
@@ -122,42 +312,15 @@ const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isA
 
         if (results.landmarks && results.landmarks.length > 0) {
           const landmarks = results.landmarks[0];
-          // Thumb tip is 4, Index tip is 8
-          const thumbTip = landmarks[4];
-          const indexTip = landmarks[8];
-
-          // Calculate Euclidean distance
-          const distance = Math.sqrt(
-            Math.pow(thumbTip.x - indexTip.x, 2) +
-            Math.pow(thumbTip.y - indexTip.y, 2)
-          );
-
-          // Map distance to zoom scale
-          // Raw distance usually ranges from 0.02 (touching) to 0.2+ (open)
-          // We want to map this to scale 1.0 to 3.0
-          // Simple linear mapping:
-          const minDist = 0.03;
-          const maxDist = 0.20;
-
-          let normalized = (distance - minDist) / (maxDist - minDist);
-          normalized = Math.max(0, Math.min(1, normalized));
-
-          // Invert logic: Pinch (small distance) = Zoom Out? Or Spread = Zoom In?
-          // Usually spread = zoom in.
-          // Let's do: Spread (large distance) = Zoom In (Seeing details)
-          // Pinch (small distance) = Zoom Out (Overview)
-
-          const targetScale = 1 + (normalized * 1.5); // Range 1.0 to 2.5
-
-          onZoomChange(targetScale);
+          detectGesture(landmarks);
         }
       }
     }
     requestRef.current = requestAnimationFrame(predictWebcam);
-  }, [handLandmarker, isCameraReady, onZoomChange]);
+  }, [handLandmarker, isCameraReady, detectGesture]);
 
   useEffect(() => {
-    if (isActive && isCameraReady) {
+    if (isActive && isCameraReady && isModelLoaded) {
       requestRef.current = requestAnimationFrame(predictWebcam);
     } else {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
@@ -165,21 +328,21 @@ const GestureController: React.FC<GestureControllerProps> = ({ onZoomChange, isA
     return () => {
       if (requestRef.current) cancelAnimationFrame(requestRef.current);
     };
-  }, [isActive, isCameraReady, predictWebcam]);
+  }, [isActive, isCameraReady, isModelLoaded, predictWebcam]);
 
   if (!isActive) return null;
 
   return (
-    <div className="fixed top-4 right-4 z-50 w-24 h-32 bg-black rounded-lg overflow-hidden border-2 border-green-400 shadow-lg opacity-80">
+    <div className="fixed top-4 right-4 z-50 w-32 h-40 bg-black rounded-lg overflow-hidden border-2 border-green-400 shadow-lg opacity-90">
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className="w-full h-full object-cover transform scale-x-[-1]" // Mirror effect
+        className="w-full h-full object-cover transform scale-x-[-1]"
       />
-      <div className="absolute bottom-0 w-full bg-black/50 text-[10px] text-white text-center py-1">
-        Air Gesture On
+      <div className="absolute bottom-0 w-full bg-black/70 text-[10px] text-white text-center py-1">
+        {isModelLoaded ? '手势已就绪' : '加载中...'}
       </div>
     </div>
   );
